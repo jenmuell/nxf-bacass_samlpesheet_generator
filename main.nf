@@ -1,4 +1,22 @@
-// Interop - bcl2fastq - MultiQC pipeline
+#!/usr/bin/env nextflow
+
+/*
+========================================================================================
+    bacass_samplesheet_generator
+========================================================================================
+    Github : 
+    Website: 
+    Slack  : 
+----------------------------------------------------------------------------------------
+*/
+
+/*
+========================================================================================
+    GENERAL SETTINGS 
+========================================================================================
+*/
+
+//nextflow.enable.dsl = 2
 
 /*
 * ANSI escape codes to color output messages
@@ -13,64 +31,157 @@ if (params.help) {
     helpMessage()
     exit(0)
 }
-/*
- * pipeline input parameters  ---------------------------------------------------------------------------------------------------------------------
- */
-// use bcl test data from Illumina basespace
- 
-// get docker ncores, not nextflow env ncores!!				
- int ncores       = Runtime.getRuntime().availableProcessors(); 
- int usable_cores = Math.floor(ncores*0.8).toInteger()				// JM: Why is this code used? --> garantee a 80 percent allocation of the cpu
-
- params.runfolder   = ""							// JM: parameters which can be changed
- params.samplesheet = "${params.runfolder}/SampleSheet.csv"
- 
- // find number of samples in order to dynamically set write_threads, must NOT be higher than number of samples
- def sample_index = file(params.samplesheet)
-        .readLines()
-        .findLastIndexOf {it =~ "Sample_ID"}                                    // JM: get number of lines until header of Samples 
- 
- def total_lines = file(params.samplesheet)					// JM: all lines in the files
-        .countLines()
- 
- def nsamples = total_lines - (sample_index + 1)				
- //println "total_lines: $total_lines, sample_index: $sample_index, nsamples: $nsamples"
- 
- params.outdir = "$workflow.launchDir/results-bcl"				// JM: rest of the parameters 
- params.title = "InterOp and bcl2fastq summary"
- params.multiqc_config = "$baseDir/multiqc_config.yml" //in case ncct multiqc config needed   // JM: can be replaced against multiqc_config_ncct.yml example in nxf-fastqc --> MS in generell not used
- params.load_threads = usable_cores
- params.proc_threads = usable_cores
- params.barcode_mismatches = 1 // default of bcl2fastq. Allows 0,1,2, so set limits also here  // JM: allow (2n+1) mismatches 
- params.scratch = false // used in special cases, stages the bcl process in a local dir
-
- if (nsamples >= usable_cores) {						// JM: number of threads can not exceed number of samples
-     params.write_threads = usable_cores
-     } else {
-     params.write_threads = nsamples
-         } //must not be higher than number of samples
-
- mqc_config = file(params.multiqc_config) // this is needed, otherwise the multiqc config file is not available in the docker image
-
 
 /*
- * Standard output per run  ---------------------------------------------------------------------------------------------------------------------
- */
+========================================================================================
+    CHECK PARAMETER INPUT
+========================================================================================
+*/
+
+// check pipeline options
+def samplesheet_header = ""
+def genomesize = 0
+def reads = params.reads
+def pipeline = params.pipeline
+
+if(pipeline == 'bacass'){
+    samplesheet_header = params.samplesheet_header
+    genomesize == params.genomesize
+} else if (pipeline == 'unicycler'){
+    samplesheet_header = null
+} else{
+    error "${ANSI_RED}Parameter pipeline: ${params.pipeline} is not one of the valid options: bacass or unicylcer${ANSI_RESET}"
+}
+
+
+// check reads options & mapping file
+// Read inputs
+def int_reads_input = null
+def ont_reads_input = null
+def ont_reads_outdir = null
+def ont_reads_ids = null
+
+// Mapping file parameters
+def mapping_file = null
+def illumina_ids_col = []
+def nanopore_ids_col = []
+def illumina_ids = null
+def nanopore_ids = null
+
+if(reads == 'short'){
+    int_reads_input = "${params.int_reads_input}".replaceFirst(/$/, "/")
+    int_reads_input_ch = Channel.fromPath(int_reads_input, checkIfExists: true, type: 'dir')
+        .ifEmpty { error "Can not find folder ${int_reads_input}" }
+
+    // Mapping file & Read IDs
+    mapping_file = file(params.mapping_file)
+                    .splitEachLine(/\t/){list -> 
+                        illumina_ids_col.add(list[0])
+                    }
+
+
+    // Value channel with Illumina read IDs
+    if (illumina_ids_col.size() > 0){
+        illumina_ids = Channel.from(illumina_ids_col)
+    } else {
+        error "${ANSI_RED}No Illumina IDs were defined. Check your mapping file ${params.mapping_file}${ANSI_RESET}"
+    }
+
+} else if (reads == 'long'){
+    ont_reads_input = "${params.ont_reads_input}".replaceFirst(/$/, "/")
+    ont_reads_input_ch = Channel.fromPath(ont_reads_input, checkIfExists: true, type: 'dir')
+        .ifEmpty { error "Can not find folder ${ont_reads_input}" }
+
+
+    ont_reads_ids = params.ont_reads_ids
+    ont_reads_ids_ch = Channel.from(Arrays.asList(ont_reads_ids.split(",")))
+    
+    // Mapping file & Read IDs 
+    mapping_file = file(params.mapping_file)
+                    .splitEachLine(/\t/){list -> 
+                        nanopore_ids_col.add(list[0])
+                    }
+
+    // Value channel with Nanopore read IDs
+    if (nanopore_ids_col.size() > 0){
+        nanopore_ids = Channel.from(nanopore_ids_col)
+    } else {
+        error "${ANSI_RED}No Nanpore IDs were defined. Check your mapping file ${params.mapping_file}${ANSI_RESET}"
+    }
+    
+   
+} else if (reads == 'hybrid'){
+    // Read inputs
+    int_reads_input = "${params.int_reads_input}".replaceFirst(/$/, "/")
+    int_reads_input_ch = Channel.fromPath(int_reads_input, checkIfExists: true, type: 'dir')
+        .ifEmpty { error "Can not find folder ${int_reads_input}" }
+
+    ont_reads_input = "${params.ont_reads_input}".replaceFirst(/$/, "/")
+    ont_reads_input_ch = Channel.fromPath(ont_reads_input, checkIfExists: true, type: 'dir')
+        .ifEmpty { error "Can not find folder ${ont_reads_input}" }
+
+    ont_reads_ids = params.ont_reads_ids
+    ont_reads_ids_ch = Channel.from(ont_reads_ids)
+
+    // Mapping file & Read IDs 
+    mapping_file = file(params.mapping_file)
+                    .splitEachLine(/\t/){list -> 
+                        illumina_ids_col.add(list[0])
+                        nanopore_ids_col.add(list[1])
+                    }
+
+    // Value channel with Illumina read IDs
+    if (illumina_ids_col.size() > 0){
+        illumina_ids = Channel.from(illumina_ids_col)
+    } else {
+        error "${ANSI_RED}No Illumina IDs were defined. Check your mapping file ${params.mapping_file}${ANSI_RESET}"
+    }
+
+    // Value channel with Nanopore read IDs
+    if (nanopore_ids_col.size() > 0){
+        nanopore_ids = Channel.from(nanopore_ids_col)
+    } else {
+        error "${ANSI_RED}No Nanpore IDs were defined. Check your mapping file ${params.mapping_file}${ANSI_RESET}"
+    }
+
+} else{
+    error "${ANSI_RED}Parameter reads: ${params.reads} is  not one of the options: short, long, hybrid${ANSI_RESET}"
+}
+
+
+mqc_config = file(params.multiqc_config) // this is needed, otherwise the multiqc config file is not available in the docker image
+outdir = file(params.outdir)
+
+/*
+========================================================================================
+    PRINT PARAMETER SUMMARY
+========================================================================================
+*/
 log.info """
         ===========================================
-         ${ANSI_GREEN}I N T E R O P   and   B C L 2 F A S T Q   P I P E L I N E${ANSI_RESET}
+         ${ANSI_GREEN}Bacterial hybrid assembly samplesheet generator and PlasmIDent${ANSI_RESET}
 
          Used parameters:
         -------------------------------------------
-         --runfolder            : ${params.runfolder}
-         --samplesheet          : ${params.samplesheet}
-         --outdir               : ${params.outdir}
-         --multiqc_config       : ${params.multiqc_config}
-         --title                : ${params.title}
-         --load_threads         : ${params.load_threads}
-         --proc_threads         : ${params.proc_threads}
-         --write_threads        : ${params.write_threads}
-         --barcode_mismatches   : ${params.barcode_mismatches}
+         --pipeline            : ${params.pipeline}
+         --reads               : ${params.reads}
+         --mapping_file        : ${params.mapping_file}
+         --outdir              : ${params.outdir}
+         --multiqc_config      : ${params.multiqc_config}
+
+         Illumina options:
+        -------------------------------------------
+         --int_reads_input     : ${params.int_reads_input}
+        
+        Nanopore options:
+        -------------------------------------------
+         --ont_reads_input     : ${params.ont_reads_input}
+         --ont_reads_outdir    : ${params.ont_reads_outdir}
+         --ont_dir_ids         : ${params.ont_reads_ids}
+
+        Nf-core/bacass options:
+          --samplesheet_header : ${params.samplesheet_header}
+          --genomesize         : ${params.genomesize}
 
          Runtime data:
         -------------------------------------------
@@ -79,16 +190,16 @@ log.info """
          Running as user        : ${ANSI_GREEN}${workflow.userName}${ANSI_RESET}
          Launch dir             : ${ANSI_GREEN}${workflow.launchDir}${ANSI_RESET}
          Base dir               : ${ANSI_GREEN}${baseDir}${ANSI_RESET}
-         Number of host cores   : ${ANSI_GREEN}${ncores}${ANSI_RESET}
-         Estimated # of samples : ${ANSI_GREEN}${nsamples}${ANSI_RESET}
          Nextflow version       : ${ANSI_GREEN}${nextflow.version}${ANSI_RESET}
         ===========================================
          """
          .stripIndent()
 
 /*
- * Help message  ---------------------------------------------------------------------------------------------------------------------
- */
+========================================================================================
+    HELP MESSAGE
+========================================================================================
+*/
 def helpMessage() {
 log.info """
         ===========================================
@@ -120,129 +231,47 @@ log.info """
 
 
 /*
- * Start processes and parameter testing  ---------------------------------------------------------------------------------------------------------------------
- */
-// in case trailing slash in runfolder not provided:
-runfolder_repaired = "${params.runfolder}".replaceFirst(/$/, "/")
-
-Channel										// JM: channel for runfolder connected to input of InterOP and bcl2fastq
-    .fromPath(runfolder_repaired, checkIfExists: true, type: 'dir')
-    .ifEmpty { error "Can not find folder ${runfolder_repaired}" }
-    .into {runfolder_interop; runfolder_bcl}
-
-Channel										// JM: channel for samplesheet connected to input of bcl2fastq
-    .fromPath(params.samplesheet, checkIfExists: true, type: 'file')		//     Is there a Error message if the samplesheet is not definied?
-    .set {samplesheet_ch}
-
-//runfolder_ch.into {runfolder_interop; runfolder_bcl}
-
-
-process interop {
-    tag "interop on $x"								// JM: label to find the process in the log file
-
+========================================================================================
+    WORKFLOW FOR PIPELINE
+========================================================================================
+*/
+process MERGE_NANOPORE_DATA {
+    tag "merge nanopore data from ${nanopore_reads}"
+    publishDir params.ont_reads_outdir, mode: 'copy'
+    
     input:
-        path x from runfolder_interop
-
-    // path is preferred over file as an output qualifier
+        path nanopore_reads from ont_reads_input_ch
+        each barcode_endings from nanopore_ids
+    
     output:
-        path 'interop_file' into interop_ch
+        file 'barcode*.fastq'
+        
 
     script:
     """
-    interop_summary --csv=1 $x > interop_file
+    cat ${nanopore_reads}/${barcode_endings}/PAE*.fastq > ${barcode_endings}.fastq
     """
-    // JM: --csv=1 to be compatible with MultiQC 
+
 }
 
-// I want to print the ncores and nsamples to adjust the bcl2fastq parameters in subsequent runs
-process bcl {
 
-    tag "bcl2fastq"
-    publishDir params.outdir, mode: 'copy', pattern: 'fastq/**fastq.gz'   // JM: path to the fastq files, copy the files from the pipeline work directory
-    //publishDir params.outdir, mode: 'copy', pattern: 'fastq/Stats/*'
-    publishDir params.outdir, mode: 'copy', pattern: 'bcl_out.log'        // JM: log file if the run was successful
-    scratch params.scratch
-    /* I use this scratch to be able to tail -f the bcl_out file, to monitor progress in the shiny app
-    echo works but with delay, while this is real time*/
-    
-    input:
-        path x from runfolder_bcl
-        path y from samplesheet_ch
-
-    // path is preferred over file as an output qualifier
-    
-    output:
-        path 'fastq/Stats/Stats.json' into bcl_ch
-        path 'fastq/**fastq.gz' // ** is for recursive match, directories are omitted (the fastq files might be in fastq/someproject/...)
-        path 'bcl_out.log'
-    
-    // default to --ignore-missing all?
-    script:
-    
-    """
-    bcl2fastq -R $x \
-    -o fastq \
-    --sample-sheet $y \
-    --no-lane-splitting \
-    --ignore-missing-bcls \
-    --barcode-mismatches ${params.barcode_mismatches} \
-    -r ${params.load_threads} \
-    -p ${params.proc_threads} \
-    -w ${params.write_threads} >bcl_out.log 2>&1
-    """
-    /* JM: parameter description
-    * -R: location of the run folder
-    * -o: location of the demultiplexed output (fastq files)
-    * --sample-sheet: path to the sample sheet
-    * --no-lane-splitting: do not split FASTQ files lane
-    * --barcode-mismatches: allowed mismatches per index adapter (0,1,2) default=0
-    * (--ignore-missing): available for bcls, filter, positions --> ignore the missing and false information
-    */
-}
-
-process multiqc {
+process GENERATE_SAMPLESHEET {
+    tag "generate samplesheet"
     publishDir params.outdir, mode: 'copy'
 
-    input:
-        file interop_file from interop_ch		// JM: logs from InterOP
-        file 'Stats.json' from bcl_ch			// logs from bcl2fastq
-        file mqc_config					// configuration file for MultiQC
-
-    output:
-        path 'multiqc_report.html'
-        path 'multiqc_report_data/multiqc_general_stats.txt' into excel_ch
-        path 'multiqc_report_data' type 'dir'
-
-    script:
-    """
-    multiqc --force --interactive \
-    --title "${params.title}" \
-    --config $mqc_config \
-    --filename "multiqc_report.html" \
-    $interop_file Stats.json
-    """
-    /* JM: parameter description
-     * --force: overwrite any existing reports
-     * (--exclude): exclude this modules
-     */
-}
-
-// take the multiqc_general_stats.txt and write an excel file from it
-process excel {
-    publishDir params.outdir, mode: 'copy'
-
-    input:
-        path mqc_stats from excel_ch
-    
-    output:
-        path 'multiqc_general_stats.xlsx'
+    input:  
+        path illumina_files from int_reads_input_ch                 // all Illumina reads
+        path nanopore_files from Channel.fromPath("${params.ont_reads_outdir}")                  // generated Nanopore output dir
+        file mapping_file_ch from Channel.fromPath("${params.mapping_file}")
     
     script:
     """
-    write_excel.R $mqc_stats
+    python3 ${baseDir}/samplesheet_generation.py $illumina_files $nanopore_files $mapping_file_ch $reads $pipeline $samplesheet_header $genomesize
     """
 
+
 }
+
 
 /*
  * Process finish line  ---------------------------------------------------------------------------------------------------------------------

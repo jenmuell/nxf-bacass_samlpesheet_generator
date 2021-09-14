@@ -1,4 +1,4 @@
-name: nextflow-bcl
+name: nextflow-bacass_samplesheet_generator
 channels:
   - conda-forge
   - dranew
