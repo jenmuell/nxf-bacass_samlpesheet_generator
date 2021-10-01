@@ -16,7 +16,7 @@
 ========================================================================================
 */
 
-//nextflow.enable.dsl = 2
+nextflow.enable.dsl = 2
 
 /*
 * ANSI escape codes to color output messages
@@ -92,9 +92,7 @@ if(reads == 'short'){
     ont_reads_input_ch = Channel.fromPath(ont_reads_input, checkIfExists: true, type: 'dir')
         .ifEmpty { error "Can not find folder ${ont_reads_input}" }
 
-
-    ont_reads_ids = params.ont_reads_ids
-    ont_reads_ids_ch = Channel.from(Arrays.asList(ont_reads_ids.split(",")))
+    ont_reads_outdir = "${params.ont_reads_outdir}".replaceFirst(/$/, "/")
     
     // Mapping file & Read IDs 
     mapping_file = file(params.mapping_file)
@@ -119,6 +117,8 @@ if(reads == 'short'){
     ont_reads_input = "${params.ont_reads_input}".replaceFirst(/$/, "/")
     ont_reads_input_ch = Channel.fromPath(ont_reads_input, checkIfExists: true, type: 'dir')
         .ifEmpty { error "Can not find folder ${ont_reads_input}" }
+
+    ont_reads_outdir = "${params.ont_reads_outdir}".replaceFirst(/$/, "/")
 
     ont_reads_ids = params.ont_reads_ids
     ont_reads_ids_ch = Channel.from(ont_reads_ids)
@@ -236,12 +236,12 @@ log.info """
 ========================================================================================
 */
 process MERGE_NANOPORE_DATA {
-    tag "merge nanopore data from ${nanopore_reads}"
-    publishDir params.ont_reads_outdir, mode: 'copy'
+    tag "merge nanopore data from ${ont_reads_input_ch}"
+    publishDir "${params.ont_reads_outdir}", mode: 'copy'
     
     input:
-        path nanopore_reads from ont_reads_input_ch
-        each barcode_endings from nanopore_ids
+        path ont_reads_input_ch
+        each nanopore
     
     output:
         file 'barcode*.fastq'
@@ -249,29 +249,125 @@ process MERGE_NANOPORE_DATA {
 
     script:
     """
-    cat ${nanopore_reads}/${barcode_endings}/PAE*.fastq > ${barcode_endings}.fastq
+    echo cat ${ont_reads_input_ch}/${nanopore}/PAE*.fastq > ${nanopore}.fastq
+    cat ${ont_reads_input_ch}/${nanopore}/PAE*.fastq > ${nanopore}.fastq
     """
 
 }
 
-
-process GENERATE_SAMPLESHEET {
-    tag "generate samplesheet"
+process GENERATE_SAMPLESHEET_WITH_LONG {
+    tag "generate samplesheet for long read assembly"
     publishDir params.outdir, mode: 'copy'
 
-    input:  
-        path illumina_files from int_reads_input_ch                 // all Illumina reads
-        path nanopore_files from Channel.fromPath("${params.ont_reads_outdir}")                  // generated Nanopore output dir
-        file mapping_file_ch from Channel.fromPath("${params.mapping_file}")
+
+    output:
+        file "samplesheet_${pipeline}.csv"
     
     script:
     """
-    python3 ${baseDir}/samplesheet_generation.py $illumina_files $nanopore_files $mapping_file_ch $reads $pipeline $samplesheet_header $genomesize
+    python3 ${baseDir}/samplesheet_generation.py null $ont_reads_outdir ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv
     """
-
-
 }
 
+process GENERATE_SAMPLESHEET_WITH_HYBRID {
+    tag "generate samplesheet for hybrid assembly"
+    publishDir params.outdir, mode: 'copy'
+
+    input:  
+        path int_reads_input_ch                 // all Illumina reads
+
+    output:
+        file "samplesheet_${pipeline}.csv"
+    
+    script:
+    """
+    python3 ${baseDir}/samplesheet_generation.py $int_reads_input_ch $ont_reads_outdir ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv 
+    """
+}
+
+process GENERATE_SAMPLESHEET_WITH_SHORT {
+    tag "generate samplesheet for short read assembly"
+    publishDir params.outdir, mode: 'copy'
+
+    input:
+        path int_reads_input_ch
+    
+    output:
+        file "samplesheet_${pipeline}.csv"
+
+    script:
+    """
+    python3 ${baseDir}/samplesheet_generation.py $int_reads_input_ch null ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv  
+    """
+}
+
+// TODO: does not work, problem with conda enviroments
+process RUN_UNICYCLER {
+    tag "run unicycler"
+    publishDir "${params.outdir}/results_unicycler", mode: 'copy'
+    conda "unicycler"
+
+    input: 
+        file samplesheet 
+        val reads_process
+        file ont_files
+    
+    output:
+        path "results_unicycler/" 
+    
+    script:
+    if (reads_process == 'short')
+    """
+    conda activate unicycler
+    while IFS="," read sample read1 read2; \
+     do unicycler -1 \${read1} -2 \${read2} -o \${sample}; \
+     done < ${samplesheet}
+    conda deactivate
+    """
+    else if (reads_process == 'long')
+    """
+    conda activate unicycler
+    while IFS="," read sample longread; \
+     do unicycler -l \${longread} -o \${sample}; \
+     done < ${samplesheet}
+    conda deactivate
+    """
+    else if (reads_process == 'hybrid')
+    """
+    conda activate unicycler
+    while IFS="," read sample read1 read2 longread; \
+     do unicycler -1 \${read1} -2 \${read2} -l \${longread} -o \${sample}; \
+     done < ${samplesheet}
+    conda deactivate
+    """
+    else 
+        error "${ANSI_RED}Unicycler run error: ${reads_process} is not one of the valid options: short, long, hybrid${ANSI_RESET}"
+}
+
+
+// Need an additional process for plasmident and nf-core/viralrecon pipeline
+workflow {
+    
+    if (reads == 'short'){
+        GENERATE_SAMPLESHEET_WITH_SHORT(int_reads_input_ch)  
+    } else if (reads == 'long'){
+        MERGE_NANOPORE_DATA(ont_reads_input_ch, nanopore_ids)
+        GENERATE_SAMPLESHEET_WITH_LONG()
+    } else if (reads == 'hybrid'){
+        MERGE_NANOPORE_DATA(ont_reads_input_ch, nanopore_ids)
+        GENERATE_SAMPLESHEET_WITH_HYBRID(int_reads_input_ch)  
+
+        if (pipeline == 'unicycler'){
+            RUN_UNICYCLER(GENERATE_SAMPLESHEET_WITH_HYBRID.out, reads, MERGE_NANOPORE_DATA.out)
+        }
+
+    } else {
+        error "${ANSI_RED}No process available for reads parameter: ${params.reads}${ANSI_RESET}"
+    }
+
+    
+
+}
 
 /*
  * Process finish line  ---------------------------------------------------------------------------------------------------------------------
@@ -282,8 +378,7 @@ workflow.onComplete {
         log.info """
             ===========================================
             ${ANSI_GREEN}Finished in ${workflow.duration}
-            See the report here      ==> ${ANSI_RESET}$params.outdir/multiqc_report.html${ANSI_GREEN}
-            The fastq files are here ==> ${ANSI_RESET}$params.outdir/fastq/
+            The samplesheet is here ==> ${ANSI_RESET}$params.outdir/samplesheet_${params.pipeline}.csv
             ===========================================
             """
             .stripIndent()
