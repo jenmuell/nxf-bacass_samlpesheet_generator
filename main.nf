@@ -54,8 +54,10 @@ if(pipeline == 'bacass'){
     samplesheet_header = null
 } else if (pipeline == 'plasmident'){
     samplesheet_header = null
+} else if (pipeline == 'viralrecon'){
+    samplesheet_header = params.samplesheet_header
 }else{
-    error "${ANSI_RED}Parameter pipeline: ${params.pipeline} is not one of the valid options: bacass or unicylcer${ANSI_RESET}"
+    error "${ANSI_RED}Parameter pipeline: ${params.pipeline} is not one of the valid options: bacass, viralrecon, unicylcer or plasmident${ANSI_RESET}"
 }
 
 
@@ -244,6 +246,7 @@ process GENERATE_SAMPLESHEET_PLASMIDENT {
 }
 
 
+
 /*
 ========================================================================================
     WORKFLOWS FOR ANALYSIS WITH PLASMIDENT AND UNICYCLER
@@ -312,7 +315,9 @@ workflow {
     if (pipeline == 'plasmident'){
         GENERATE_SAMPLESHEET_PLASMIDENT()
         //RUN_PLASMIDENT(GENERATE_SAMPLESHEET_PLASMIDENT.out)
-    } else if (reads == 'short'){
+    } else if (pipeline == 'viralrecon'){
+        GENERATE_SAMPLESHEET_WITH_SHORT(int_reads_input_ch)
+    }else if (reads == 'short'){
         GENERATE_SAMPLESHEET_WITH_SHORT(int_reads_input_ch)  
     } else if (reads == 'long'){
         MERGE_NANOPORE_DATA(ont_reads_input_ch, nanopore_ids)

@@ -27,7 +27,7 @@ def parameter_Message(){
     }
     log.info """
             ===========================================
-            ${ANSI_GREEN}Bacterial hybrid assembly, Unicycler and PlasmIDent samplesheet generator${ANSI_RESET}
+            ${ANSI_GREEN}Sample sheet generator for various pipelines${ANSI_RESET}
 
             Used parameters:
             -------------------------------------------
@@ -46,7 +46,7 @@ def parameter_Message(){
             --ont_reads_input     : ${params.ont_reads_input}
             --ont_reads_outdir    : ${params.ont_reads_outdir}
 
-            Nf-core/bacass options:
+            Nf-core/bacass or /viralrecon options:
             -------------------------------------------
             --samplesheet_header : ${params.samplesheet_header}
             --genomesize         : ${params.genomesize}
@@ -77,17 +77,17 @@ def parameter_Message(){
 def helpMessage() {
     log.info """
             ===========================================
-            ${ANSI_GREEN}Bacterial hybrid assembly, Unicycler and PlasmIDent samplesheet generator${ANSI_RESET}
+            ${ANSI_GREEN}Sample sheet generator for various pipelines${ANSI_RESET}
 
             This pipeline generates the samplesheets for the various options to perform a bacterial assembly.
             You can choose between the three different assembly types short, long and hybrid as well as between
             the two different assembly pipelines ${ANSI_GREEN}nf-core/bacass and unicycler${ANSI_RESET}.
             If long reads are specified a concatination of the individual FastQ files in the barcodeX directories will be performed.
-            As extension the samplesheet for the ${ANSI_GREEN}imgag/plasmIDent${ANSI_RESET} pipeline can be generated.
+            As extension the samplesheet for the ${ANSI_GREEN}imgag/plasmIDent and nf-core/viralrecon${ANSI_RESET} pipeline can be generated.
 
             General parameters:
             -------------------------------------------
-            --pipeline            : Pipeline for which a samplesheet should be generated | nf-core/bacass (default), unicycler or imgag/plasmIDent
+            --pipeline            : Pipeline for which a samplesheet should be generated | bacass (default), viralrecon, unicycler or plasmident
             --reads               : Choice between short (default), long or hybrid assembly
             --mapping_file        : Path to tab-separated mapping file, has to contain the sample IDs for short reads and sample barcodes for long reads
                                     If you want to perform a hybrid assembly the first column has to contain the sample IDs and the second the long read barcodes
@@ -104,9 +104,9 @@ def helpMessage() {
                                     must contain the same name as the barcodes in the mapping file
             --ont_reads_outdir    : The output directory for the concatinated and renamed FastQ files for each individual barcode
 
-            Nf-core/bacass options:
+            Nf-core/bacass and viralrecon options:
             -------------------------------------------
-            --samplesheet_header : String with the header information of the samplesheets. Default is the bacass header since all other do not require a header
+            --samplesheet_header : comma-separated string with the header information of the samplesheets. Default is the bacass header
             --genomesize         : Expected genomesize in Megabases. Only used by the canu assembler in the nf-core/bacass pipeline. Default: 0
             
             plasmIDent options:

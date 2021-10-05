@@ -102,6 +102,8 @@ if __name__ == '__main__':
     samplesheet_string = ''
     if pipeline == 'bacass':
         samplesheet_string = samplesheet_header.replace(',', '\t') + '\n'   # header for nf-core/bacass pipeline
-    
+    elif pipeline == 'viralrecon':
+        samplesheet_string = samplesheet_header + '\n' 
+        pipeline = 'unicycler'
     samplesheet_string += wrapper_process(illumina_files, nanopore_files, assembly_files, mapping_file, reads, pipeline, genomesize)
     print(samplesheet_string)
