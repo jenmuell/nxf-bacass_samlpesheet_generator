@@ -2,7 +2,7 @@
 
 /*
 ========================================================================================
-    bacass_samplesheet_generator
+    nxf-bacass_samplesheet_generator
 ========================================================================================
     Github : 
     Website: 
@@ -17,6 +17,7 @@
 */
 
 nextflow.enable.dsl = 2
+include { helpMessage; parameter_Message } from './commandline_messages'
 
 /*
 * ANSI escape codes to color output messages
@@ -31,6 +32,8 @@ if (params.help) {
     helpMessage()
     exit(0)
 }
+
+parameter_Message()
 
 /*
 ========================================================================================
@@ -49,7 +52,9 @@ if(pipeline == 'bacass'){
     genomesize == params.genomesize
 } else if (pipeline == 'unicycler'){
     samplesheet_header = null
-} else{
+} else if (pipeline == 'plasmident'){
+    samplesheet_header = null
+}else{
     error "${ANSI_RED}Parameter pipeline: ${params.pipeline} is not one of the valid options: bacass or unicylcer${ANSI_RESET}"
 }
 
@@ -152,87 +157,10 @@ if(reads == 'short'){
 mqc_config = file(params.multiqc_config) // this is needed, otherwise the multiqc config file is not available in the docker image
 outdir = file(params.outdir)
 
-/*
-========================================================================================
-    PRINT PARAMETER SUMMARY
-========================================================================================
-*/
-log.info """
-        ===========================================
-         ${ANSI_GREEN}Bacterial hybrid assembly samplesheet generator and PlasmIDent${ANSI_RESET}
-
-         Used parameters:
-        -------------------------------------------
-         --pipeline            : ${params.pipeline}
-         --reads               : ${params.reads}
-         --mapping_file        : ${params.mapping_file}
-         --outdir              : ${params.outdir}
-         --multiqc_config      : ${params.multiqc_config}
-
-         Illumina options:
-        -------------------------------------------
-         --int_reads_input     : ${params.int_reads_input}
-        
-        Nanopore options:
-        -------------------------------------------
-         --ont_reads_input     : ${params.ont_reads_input}
-         --ont_reads_outdir    : ${params.ont_reads_outdir}
-         --ont_dir_ids         : ${params.ont_reads_ids}
-
-        Nf-core/bacass options:
-          --samplesheet_header : ${params.samplesheet_header}
-          --genomesize         : ${params.genomesize}
-
-         Runtime data:
-        -------------------------------------------
-         Running with profile   : ${ANSI_GREEN}${workflow.profile}${ANSI_RESET}
-         Used container         : ${ANSI_GREEN}${workflow.container}${ANSI_RESET}
-         Running as user        : ${ANSI_GREEN}${workflow.userName}${ANSI_RESET}
-         Launch dir             : ${ANSI_GREEN}${workflow.launchDir}${ANSI_RESET}
-         Base dir               : ${ANSI_GREEN}${baseDir}${ANSI_RESET}
-         Nextflow version       : ${ANSI_GREEN}${nextflow.version}${ANSI_RESET}
-        ===========================================
-         """
-         .stripIndent()
 
 /*
 ========================================================================================
-    HELP MESSAGE
-========================================================================================
-*/
-def helpMessage() {
-log.info """
-        ===========================================
-         ${ANSI_GREEN}I N T E R O P   and   B C L 2 F A S T Q   P I P E L I N E${ANSI_RESET}
-
-         This pipeline takes an Illumina run output folder and runs the Illumina executables
-         InterOp summary (sequencing run metrics) and bcl2fastq (converts bcl to fastq).
-         By default, the file SampleSheet.csv from the runfolder is used in bcl2fastq, but another sample sheet file can be provided.
-         The resulting fastq files are saved under ${ANSI_GREEN}results-bcl/fastq${ANSI_RESET}.
-         The number of threads used by bcl2fastq are set to 4. If you know what you are doing,
-         you can set them using the respective parameters.
-
-         Usage:
-        -------------------------------------------
-         --runfolder            : Illumina run folder
-         --outdir               : where results will be saved, default is "results-bcl"
-         --samplesheet          : sample sheet file, default is runfolder/SampleSheet.csv
-         --multiqc_config       : config file for MultiQC, default is "multiqc_config.yml"
-         --title                : MultiQC report title, default is "InterOp and bcl2fastq summary"
-         --load_threads         : Number of threads used for loading BCL data. 4 by default.
-         --proc_threads         : Number of threads used for processing demultiplexed data. 4 by default.
-         --write_threads        : number of threads used for writing FASTQ data. ${ANSI_RED}Must not be higher than number of samples!${ANSI_RESET} 4 by default.
-         --barcode_mismatches:  : number of allowed barcode mismatches per index, 1 by default. Accepted values: 0,1,2.
-        ===========================================
-         """
-         .stripIndent()
-
-}
-
-
-/*
-========================================================================================
-    WORKFLOW FOR PIPELINE
+    WORKFLOWS FOR PREPROCESSING AND SAMPLESHEET GENERATION
 ========================================================================================
 */
 process MERGE_NANOPORE_DATA {
@@ -265,7 +193,7 @@ process GENERATE_SAMPLESHEET_WITH_LONG {
     
     script:
     """
-    python3 ${baseDir}/samplesheet_generation.py null $ont_reads_outdir ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv
+    python3 ${baseDir}/samplesheet_generation.py null $ont_reads_outdir null ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv
     """
 }
 
@@ -281,7 +209,7 @@ process GENERATE_SAMPLESHEET_WITH_HYBRID {
     
     script:
     """
-    python3 ${baseDir}/samplesheet_generation.py $int_reads_input_ch $ont_reads_outdir ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv 
+    python3 ${baseDir}/samplesheet_generation.py $int_reads_input_ch $ont_reads_outdir null ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv 
     """
 }
 
@@ -297,7 +225,40 @@ process GENERATE_SAMPLESHEET_WITH_SHORT {
 
     script:
     """
-    python3 ${baseDir}/samplesheet_generation.py $int_reads_input_ch null ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv  
+    python3 ${baseDir}/samplesheet_generation.py $int_reads_input_ch null null ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv  
+    """
+}
+
+process GENERATE_SAMPLESHEET_PLASMIDENT {
+    tag "generate samplesheet for plasmIDent pipeline"
+    publishDir params.outdir, mode: 'copy'
+
+    output:
+        file "samplesheet_${pipeline}.tsv"
+    
+    
+    script:
+    """
+    python3 ${baseDir}/samplesheet_generation.py null $ont_reads_outdir ${params.plas_assemblies} ${launchDir}/${params.mapping_file} null $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.tsv
+    """
+}
+
+
+/*
+========================================================================================
+    WORKFLOWS FOR ANALYSIS WITH PLASMIDENT AND UNICYCLER
+========================================================================================
+*/
+// TODO: does not work, problem with command
+process RUN_PLASMIDENT {
+    tag "run plasmIDent pipeline"
+
+    input:
+        file samplesheet_plasmident
+    
+    script:
+    """
+    sudo nextflow run imgag/plasmIDent --input $samplesheet_plasmident --outDir ${params.plas_outdir} -profile docker
     """
 }
 
@@ -348,7 +309,10 @@ process RUN_UNICYCLER {
 // Need an additional process for plasmident and nf-core/viralrecon pipeline
 workflow {
     
-    if (reads == 'short'){
+    if (pipeline == 'plasmident'){
+        GENERATE_SAMPLESHEET_PLASMIDENT()
+        //RUN_PLASMIDENT(GENERATE_SAMPLESHEET_PLASMIDENT.out)
+    } else if (reads == 'short'){
         GENERATE_SAMPLESHEET_WITH_SHORT(int_reads_input_ch)  
     } else if (reads == 'long'){
         MERGE_NANOPORE_DATA(ont_reads_input_ch, nanopore_ids)
@@ -357,11 +321,11 @@ workflow {
         MERGE_NANOPORE_DATA(ont_reads_input_ch, nanopore_ids)
         GENERATE_SAMPLESHEET_WITH_HYBRID(int_reads_input_ch)  
 
-        if (pipeline == 'unicycler'){
-            RUN_UNICYCLER(GENERATE_SAMPLESHEET_WITH_HYBRID.out, reads, MERGE_NANOPORE_DATA.out)
-        }
+        //if (pipeline == 'unicycler'){
+          //  RUN_UNICYCLER(GENERATE_SAMPLESHEET_WITH_HYBRID.out, reads, MERGE_NANOPORE_DATA.out)
+        //}
 
-    } else {
+    }else {
         error "${ANSI_RED}No process available for reads parameter: ${params.reads}${ANSI_RESET}"
     }
 
@@ -369,25 +333,4 @@ workflow {
 
 }
 
-/*
- * Process finish line  ---------------------------------------------------------------------------------------------------------------------
- */
-//=============================
-workflow.onComplete {
-    if (workflow.success) {
-        log.info """
-            ===========================================
-            ${ANSI_GREEN}Finished in ${workflow.duration}
-            The samplesheet is here ==> ${ANSI_RESET}$params.outdir/samplesheet_${params.pipeline}.csv
-            ===========================================
-            """
-            .stripIndent()
-    }
-    else {
-        log.info """
-            ===========================================
-            ${ANSI_RED}Finished with errors!${ANSI_RESET}
-            """
-            .stripIndent()
-    }
-}
+
