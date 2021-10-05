@@ -1,6 +1,6 @@
 # nxf-bacass_samlpesheet_generator
 
-A simple [nextflow](https://www.nextflow.io/) pipeline to generate the sample sheets for the unicycler, nf-core/bacass and the plasmIDent pipeline.
+A simple [nextflow](https://www.nextflow.io/) pipeline to generate the sample sheets for the [unicycler](https://github.com/rrwick/Unicycler), [nf-core/bacass](https://nf-co.re/bacass/2.0.0/parameters) and the [plasmIDent](https://github.com/imgag/plasmIDent) pipeline.
 It can handle all types of assemblies and was tested with Illumina and Nanopore Reads.
 Current the pipeline run on the local maschine and require an installation of python (v3.6). 
 
