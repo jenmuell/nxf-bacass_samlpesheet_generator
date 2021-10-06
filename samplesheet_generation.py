@@ -10,7 +10,7 @@ def generate_samplesheet_short(illumina_files, mapping_file, pipeline, genomesiz
     for line in mapping_file:  # Read mapping file line by line
         illumina_reads_id = [file for file in illumina_read_files if line[:-1] in file]  # R1 and R1 for sample 
         if pipeline == 'bacass':
-            samplesheet_string += str(line[:-1]) + '\t' + illumina_files + '/' + illumina_reads_id[0] + '\t' + illumina_files + '/' + illumina_reads_id[1] + '\tNA\tNA\t' + str(genomesize) + 'm\n'
+            samplesheet_string += str(line[:-1]) + '\t' + illumina_files + '/' + illumina_reads_id[0] + '\t' + illumina_files + '/' + illumina_reads_id[1] + '\tNA\tNA\t' + str(genomesize) + '\n'
     
         elif pipeline == 'unicycler':
             samplesheet_string += str(line[:-1]) + ',' + illumina_files + '/' + illumina_reads_id[0] + ',' + illumina_files + '/' + illumina_reads_id[1] + '\n'
@@ -27,7 +27,7 @@ def generate_samplesheet_long(nanopore_files, mapping_file, pipeline, genomesize
 
     for line in mapping_file:
         if pipeline == 'bacass':
-            samplesheet_string += str(line[:-1]) + '\tNA\tNA\t' + nanopore_files + line[:-1] + '.fastq\tNA\t' + str(genomesize) + 'm\n'
+            samplesheet_string += str(line[:-1]) + '\tNA\tNA\t' + nanopore_files + line[:-1] + '.fastq\tNA\t' + str(genomesize) + '\n'
     
         elif pipeline == 'unicycler':
             samplesheet_string += str(line[:-1]) + ',' + nanopore_files + line[:-1] + '.fastq\n'
@@ -47,7 +47,7 @@ def generate_samplesheet_hybrid(illumina_files, nanopore_files, mapping_file, pi
         split_line = line.replace('\n','').split('\t')        # split each line by separater (',' comma) --> expect mapping order sampleID, nanopore ID (barcodeXX)
         illumina_reads_id = [file for file in illumina_read_files if split_line[0] in file] # get Illumina reads matching to the sample ID
         if pipeline == 'bacass':
-            samplesheet_string += str(split_line[0]) + '\t'  + illumina_reads_id[0] + '\t' +  illumina_reads_id[1] + '\t' + nanopore_files + split_line[1] + '.fastq\tNA\t' + str(genomesize) + 'm\n'
+            samplesheet_string += str(split_line[0]) + '\t'  + illumina_reads_id[0] + '\t' +  illumina_reads_id[1] + '\t' + nanopore_files + split_line[1] + '.fastq\tNA\t' + str(genomesize) + '\n'
 
         elif pipeline == 'unicycler':
             samplesheet_string += str(split_line[0]) + ',' +  illumina_reads_id[0] + ','  + illumina_reads_id[1] + ',' + nanopore_files + split_line[1] + '.fastq\n'

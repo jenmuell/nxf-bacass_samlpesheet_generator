@@ -43,13 +43,13 @@ parameter_Message()
 
 // check pipeline options
 def samplesheet_header = ""
-def genomesize = 0
+def genomesize = 0f
 def reads = params.reads
 def pipeline = params.pipeline
 
 if(pipeline == 'bacass'){
     samplesheet_header = params.samplesheet_header
-    genomesize == params.genomesize
+    genomesize = params.genomesize
 } else if (pipeline == 'unicycler'){
     samplesheet_header = null
 } else if (pipeline == 'plasmident'){
