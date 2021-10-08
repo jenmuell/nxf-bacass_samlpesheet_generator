@@ -117,7 +117,7 @@ if(reads == 'short'){
    
 } else if (reads == 'hybrid'){
     // Read inputs
-    int_reads_input = "${params.int_reads_input}".replaceFirst(/$/, "/")
+    int_reads_input = "${params.int_reads_input}"
     int_reads_input_ch = Channel.fromPath(int_reads_input, checkIfExists: true, type: 'dir')
         .ifEmpty { error "Can not find folder ${int_reads_input}" }
 
@@ -226,8 +226,9 @@ process GENERATE_SAMPLESHEET_WITH_SHORT {
         file "samplesheet_${pipeline}.csv"
 
     script:
+    int_dir = int_reads_input_ch.toString()
     """
-    python3 ${baseDir}/samplesheet_generation.py $int_reads_input_ch null null ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv  
+    python3 ${baseDir}/samplesheet_generation.py ${launchDir}/${int_reads_input} null null ${launchDir}/${params.mapping_file} $reads $pipeline $samplesheet_header $genomesize > samplesheet_${pipeline}.csv  
     """
 }
 

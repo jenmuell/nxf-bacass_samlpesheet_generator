@@ -10,10 +10,10 @@ def generate_samplesheet_short(illumina_files, mapping_file, pipeline, genomesiz
     for line in mapping_file:  # Read mapping file line by line
         illumina_reads_id = [file for file in illumina_read_files if line[:-1] in file]  # R1 and R1 for sample 
         if pipeline == 'bacass':
-            samplesheet_string += str(line[:-1]) + '\t' + illumina_files + '/' + illumina_reads_id[0] + '\t' + illumina_files + '/' + illumina_reads_id[1] + '\tNA\tNA\t' + str(genomesize) + '\n'
+            samplesheet_string += str(line[:-1]) + '\t'  + illumina_files  + illumina_reads_id[0] + '\t' + illumina_files + illumina_reads_id[1] + '\tNA\tNA\t' + str(genomesize) + '\n'
     
         elif pipeline == 'unicycler':
-            samplesheet_string += str(line[:-1]) + ',' + illumina_files + '/' + illumina_reads_id[0] + ',' + illumina_files + '/' + illumina_reads_id[1] + '\n'
+            samplesheet_string += str(line[:-1]) + ','  + illumina_files  + illumina_reads_id[0] + ',' +  illumina_files + illumina_reads_id[1] + '\n'
     
         else:
             print('Samplesheet generation error: --pipeline input is not bacass or unicycler')
@@ -42,15 +42,14 @@ def generate_samplesheet_long(nanopore_files, mapping_file, pipeline, genomesize
 def generate_samplesheet_hybrid(illumina_files, nanopore_files, mapping_file, pipeline, genomesize):
     samplesheet_string = ''
     illumina_read_files = [join(illumina_files, f) for f in listdir(illumina_files) if isfile(join(illumina_files, f))]           # list of all illumina reads
-
     for line in mapping_file:
         split_line = line.replace('\n','').split('\t')        # split each line by separater (',' comma) --> expect mapping order sampleID, nanopore ID (barcodeXX)
         illumina_reads_id = [file for file in illumina_read_files if split_line[0] in file] # get Illumina reads matching to the sample ID
         if pipeline == 'bacass':
-            samplesheet_string += str(split_line[0]) + '\t'  + illumina_reads_id[0] + '\t' +  illumina_reads_id[1] + '\t' + nanopore_files + split_line[1] + '.fastq\tNA\t' + str(genomesize) + '\n'
+            samplesheet_string += str(split_line[0]) + '\t'   + illumina_files +  illumina_reads_id[0] + '\t' +  illumina_files + illumina_reads_id[1] + '\t' + nanopore_files + split_line[1] + '.fastq\tNA\t' + str(genomesize) + '\n'
 
         elif pipeline == 'unicycler':
-            samplesheet_string += str(split_line[0]) + ',' +  illumina_reads_id[0] + ','  + illumina_reads_id[1] + ',' + nanopore_files + split_line[1] + '.fastq\n'
+            samplesheet_string += str(split_line[0]) + ','+ illumina_files +  illumina_reads_id[0] + ','   + illumina_files +  illumina_reads_id[1] + ',' + nanopore_files + split_line[1] + '.fastq\n'
             
     return samplesheet_string
 
@@ -60,9 +59,9 @@ def generate_samplesheet_plasmident(mapping_file, nanopore_files, assembly_files
     for line in mapping_file:
         split_line = line.replace('\n', '').split('\t')
         if assembly_files == 'null' :
-            samplesheet_string += str(split_line[0]) + '\t' + str(split_line[0]) + '/assembly.fasta\t' + nanopore_files + split_line[1] + '.fastq\n'
-        else:
             samplesheet_string += str(split_line[0]) + '\t' + assembly_files + str(split_line[0]) + '/assembly.fasta\t' + nanopore_files + split_line[1] + '.fastq\n'
+        else:
+            samplesheet_string += str(split_line[0]) + '\t' +  assembly_files + str(split_line[0]) + '/assembly.fasta\t' + nanopore_files + split_line[1] + '.fastq\n'
 
     return samplesheet_string
 
@@ -98,6 +97,8 @@ if __name__ == '__main__':
     pipeline = sys.argv[6]
     samplesheet_header = sys.argv[7]
     genomesize = sys.argv[8]
+
+
 
     samplesheet_string = ''
     if pipeline == 'bacass':

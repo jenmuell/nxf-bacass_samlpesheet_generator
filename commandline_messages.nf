@@ -89,7 +89,8 @@ def helpMessage() {
             -------------------------------------------
             --pipeline            : Pipeline for which a samplesheet should be generated | bacass (default), viralrecon, unicycler or plasmident
             --reads               : Choice between short (default), long or hybrid assembly
-            --mapping_file        : Path to tab-separated mapping file, has to contain the sample IDs for short reads and sample barcodes for long reads
+            --mapping_file        : tab-separated mapping file, has to contain the sample IDs for short reads and sample barcodes for long reads
+                                    ${ANSI_RED}has to be stored in the directory, where the pipeline is executed${ANSI_RESET}
                                     If you want to perform a hybrid assembly the first column has to contain the sample IDs and the second the long read barcodes
             --outdir              : The output directory were the results will be saved
             --multiqc_config      : Path to multiqc configuration file, ${ANSI_RED}currently not used${ANSI_RESET}
