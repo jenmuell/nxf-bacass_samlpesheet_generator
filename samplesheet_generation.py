@@ -11,7 +11,8 @@ def generate_samplesheet_short(illumina_files, mapping_file, pipeline, genomesiz
         illumina_reads_id = [file for file in illumina_read_files if line[:-1] in file]  # R1 and R1 for sample 
         if pipeline == 'bacass':
             samplesheet_string += str(line[:-1]) + '\t'  + illumina_files  + illumina_reads_id[0] + '\t' + illumina_files + illumina_reads_id[1] + '\tNA\tNA\t' + str(genomesize) + '\n'
-    
+        elif pipeline == 'viralrecon':
+            samplesheet_string += str(line[:-1]) + '\t'  + illumina_files  + illumina_reads_id[0] + '\t' + illumina_files + illumina_reads_id[1] + '\n'
         elif pipeline == 'unicycler':
             samplesheet_string += str(line[:-1]) + ','  + illumina_files  + illumina_reads_id[0] + ',' +  illumina_files + illumina_reads_id[1] + '\n'
     
@@ -107,4 +108,4 @@ if __name__ == '__main__':
         samplesheet_string = samplesheet_header + '\n' 
         pipeline = 'unicycler'
     samplesheet_string += wrapper_process(illumina_files, nanopore_files, assembly_files, mapping_file, reads, pipeline, genomesize)
-    print(samplesheet_string)
+    print(samplesheet_string[:-1])
