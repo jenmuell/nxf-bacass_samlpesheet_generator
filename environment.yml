@@ -1,9 +1,0 @@
-name: nextflow-bacass_samplesheet_generator
-channels:
-  - conda-forge
-  - dranew
-  - bioconda
-dependencies:
-  - bcl2fastq
-  - illumina-interop
-  - multiqc=1.8 # do not update!
